@@ -8,6 +8,7 @@ import {
   projects,
   users,
 } from "../drizzle/schema";
+import { statusForCompletion, type ContentFormat, type ContentStatus } from "@shared/editoria";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -101,8 +102,8 @@ export async function listContent(userId: number) {
 }
 
 export async function createContent(userId: number, input: {
-  projectId: number; pillarId?: number | null; title: string; format: "story" | "reel" | "carrossel"; status: "ideia" | "em produção" | "pronto" | "publicado";
-  scheduledFor?: Date | null; caption?: string; hashtags?: string; visualReference?: string;
+  projectId: number; pillarId?: number | null; title: string; format: ContentFormat; status: ContentStatus;
+  scheduledFor?: Date | null; script?: string; caption?: string; hashtags?: string; visualReference?: string; completedAt?: Date | null;
 }) {
   const { db } = await ownedProject(userId, input.projectId);
   if (input.pillarId) {
@@ -113,13 +114,38 @@ export async function createContent(userId: number, input: {
   return Number(result[0].insertId);
 }
 
-export async function updateContentStatus(userId: number, contentId: number, status: "ideia" | "em produção" | "pronto" | "publicado") {
+export async function getContentForUser(userId: number, contentId: number) {
   const db = await getDb();
   if (!db) throw new Error("Banco de dados indisponível.");
   const item = await db.select().from(contentItems).where(eq(contentItems.id, contentId)).limit(1);
   if (!item[0]) throw new Error("Conteúdo não encontrado.");
   await ownedProject(userId, item[0].projectId);
+  return { db, item: item[0] };
+}
+
+export async function updateContentStatus(userId: number, contentId: number, status: ContentStatus) {
+  const { db } = await getContentForUser(userId, contentId);
   await db.update(contentItems).set({ status }).where(eq(contentItems.id, contentId));
+}
+
+export async function updateContent(userId: number, contentId: number, input: {
+  pillarId?: number | null; title?: string; format?: ContentFormat; status?: ContentStatus; scheduledFor?: Date | null;
+  script?: string; caption?: string; hashtags?: string; visualReference?: string;
+}) {
+  const { db, item } = await getContentForUser(userId, contentId);
+  if (input.pillarId) {
+    const pillar = await db.select().from(editorialPillars).where(and(eq(editorialPillars.id, input.pillarId), eq(editorialPillars.projectId, item.projectId))).limit(1);
+    if (!pillar[0]) throw new Error("Pilar editorial inválido para este projeto.");
+  }
+  await db.update(contentItems).set(input).where(eq(contentItems.id, contentId));
+}
+
+export async function setContentCompleted(userId: number, contentId: number, completed: boolean) {
+  const { db } = await getContentForUser(userId, contentId);
+  await db.update(contentItems).set({
+    completedAt: completed ? new Date() : null,
+    status: statusForCompletion(completed),
+  }).where(eq(contentItems.id, contentId));
 }
 
 export async function listMoodboards(userId: number) {

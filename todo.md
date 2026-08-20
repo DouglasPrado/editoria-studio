@@ -13,3 +13,12 @@
 - [x] Verificar as rotas autenticadas principais em desktop e mobile, incluindo estados vazios e formulários.
 - [x] Realizar auditoria básica de acessibilidade em labels, foco, contraste e controles interativos.
 - [x] Salvar uma versão validada da plataforma para entrega.
+- [x] Adicionar roteiro completo, campo de data e marcador de conteúdo concluído em cada peça.
+- [x] Ampliar os formatos para carrossel, reels 7s, reels longo e stories.
+- [x] Importar os conteúdos do arquivo anexado para o projeto da usuária.
+- [x] Criar ação para gerar conteúdos similares a partir de um roteiro selecionado.
+- [x] Criar modal de refinamento opcional antes de gerar novos conteúdos similares.
+- [x] Validar a ampliação, testes e responsividade antes de salvar a nova versão.
+- [x] Adicionar testes dos contratos de roteiro, data, formatos e conclusão de publicação.
+- [x] Confirmar os novos controles de Planejamento com o acervo autenticado em desktop e mobile.
+- [x] Cobrir a transição de status ao marcar ou desmarcar uma publicação como concluída.

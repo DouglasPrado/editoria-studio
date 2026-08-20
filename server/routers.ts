@@ -14,6 +14,19 @@ const projectInput = z.object({
   brandTone: z.string().trim().max(1000).optional(),
 });
 
+export const contentInputSchema = z.object({
+  projectId: z.number().int().positive(),
+  pillarId: z.number().int().positive().nullable().optional(),
+  title: z.string().trim().min(2).max(180),
+  format: contentFormatSchema,
+  status: contentStatusSchema,
+  scheduledFor: z.number().int().positive().nullable().optional(),
+  script: z.string().trim().max(20_000).optional(),
+  caption: z.string().trim().max(5_000).optional(),
+  hashtags: z.string().trim().max(1_200).optional(),
+  visualReference: z.string().trim().max(3_000).optional(),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -48,13 +61,75 @@ export const appRouter = router({
   }),
   content: router({
     list: protectedProcedure.query(({ ctx }) => db.listContent(ctx.user.id)),
-    create: protectedProcedure.input(z.object({
-      projectId: z.number().int().positive(), pillarId: z.number().int().positive().nullable().optional(), title: z.string().trim().min(2).max(180),
-      format: contentFormatSchema, status: contentStatusSchema, scheduledFor: z.number().int().positive().nullable().optional(),
-      caption: z.string().trim().max(5000).optional(), hashtags: z.string().trim().max(1200).optional(), visualReference: z.string().trim().max(3000).optional(),
-    })).mutation(({ ctx, input }) => db.createContent(ctx.user.id, { ...input, scheduledFor: input.scheduledFor ? new Date(input.scheduledFor) : null })),
+    create: protectedProcedure.input(contentInputSchema).mutation(({ ctx, input }) => db.createContent(ctx.user.id, { ...input, scheduledFor: input.scheduledFor ? new Date(input.scheduledFor) : null })),
+    update: protectedProcedure.input(contentInputSchema.omit({ projectId: true }).partial().extend({ id: z.number().int().positive() })).mutation(({ ctx, input }) => {
+      const { id, scheduledFor, ...content } = input;
+      return db.updateContent(ctx.user.id, id, { ...content, ...(scheduledFor !== undefined ? { scheduledFor: scheduledFor ? new Date(scheduledFor) : null } : {}) });
+    }),
     updateStatus: protectedProcedure.input(z.object({ id: z.number().int().positive(), status: contentStatusSchema }))
       .mutation(({ ctx, input }) => db.updateContentStatus(ctx.user.id, input.id, input.status)),
+    setCompleted: protectedProcedure.input(z.object({ id: z.number().int().positive(), completed: z.boolean() }))
+      .mutation(({ ctx, input }) => db.setContentCompleted(ctx.user.id, input.id, input.completed)),
+    generateSimilar: protectedProcedure.input(z.object({ id: z.number().int().positive(), refinement: z.string().trim().max(2_000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const source = await db.getContentForUser(ctx.user.id, input.id);
+        const sourceText = [source.item.title, source.item.script, source.item.caption].filter(Boolean).join("\n\n");
+        if (sourceText.trim().length < 20) throw new Error("Adicione um roteiro ou legenda mais completa antes de gerar conteúdos similares.");
+        const response = await invokeLLM({
+          model: "gpt-5-mini",
+          messages: [
+            { role: "system", content: "Você é uma estrategista de conteúdo brasileira. Crie conteúdos educativos distintos e acionáveis, sem copiar frases inteiras do material-base. Preserve o tom humano e didático. Em temas financeiros, evite promessas, recomendações individualizadas, rentabilidade garantida ou linguagem de certeza. Responda somente no JSON solicitado." },
+            { role: "user", content: `Crie 3 novas variações de conteúdo inspiradas no roteiro abaixo. Todas devem ser independentes, manter o formato ${source.item.format} e ter um roteiro completo pronto para gravação ou publicação. ${input.refinement ? `Refinamento pedido pela criadora: ${input.refinement}` : ""}\n\nROTEIRO-BASE:\n${sourceText}` },
+          ],
+          maxTokens: 4500,
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "variacoes_de_conteudo",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  items: {
+                    type: "array",
+                    minItems: 3,
+                    maxItems: 3,
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        caption: { type: "string" },
+                        script: { type: "string" },
+                        hashtags: { type: "string" },
+                        visualReference: { type: "string" },
+                      },
+                      required: ["title", "caption", "script", "hashtags", "visualReference"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["items"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const raw = response.choices[0]?.message.content;
+        if (typeof raw !== "string") throw new Error("A geração retornou um formato inesperado. Tente novamente.");
+        const generated = JSON.parse(raw) as { items: Array<{ title: string; caption: string; script: string; hashtags: string; visualReference: string }> };
+        await Promise.all(generated.items.map(item => db.createContent(ctx.user.id, {
+          projectId: source.item.projectId,
+          pillarId: source.item.pillarId,
+          title: item.title,
+          format: source.item.format,
+          status: "ideia",
+          caption: item.caption,
+          script: item.script,
+          hashtags: item.hashtags,
+          visualReference: item.visualReference,
+        })));
+        return { created: generated.items.length };
+      }),
   }),
   moodboard: router({
     list: protectedProcedure.query(({ ctx }) => db.listMoodboards(ctx.user.id)),
