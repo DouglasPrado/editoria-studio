@@ -22,3 +22,8 @@
 - [x] Adicionar testes dos contratos de roteiro, data, formatos e conclusão de publicação.
 - [x] Confirmar os novos controles de Planejamento com o acervo autenticado em desktop e mobile.
 - [x] Cobrir a transição de status ao marcar ou desmarcar uma publicação como concluída.
+- [ ] Avaliar e configurar a integração de publicação real no Instagram.
+- [ ] Adicionar suporte à mídia necessária para publicação de stories, reels e carrosséis.
+- [ ] Criar fluxo de publicação com prévia, legenda e confirmação explícita antes do envio.
+- [ ] Atualizar o conteúdo para publicado somente após confirmação de publicação bem-sucedida.
+- [ ] Validar e salvar a integração de publicação real.
