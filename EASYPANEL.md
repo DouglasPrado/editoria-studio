@@ -25,7 +25,7 @@ Copie todas as chaves de `.env.easypanel.example` para a aba **Environment** do 
 | Variável | Origem | Uso |
 |---|---|---|
 | `DATABASE_URL` | Serviço Postgres do Easypanel | Conexão interna do banco. |
-| `VITE_CLERK_PUBLISHABLE_KEY` e `CLERK_SECRET_KEY` | Clerk Dashboard | Sessão e contas da plataforma. |
+| `VITE_CLERK_PUBLISHABLE_KEY`, `CLERK_PUBLISHABLE_KEY` e `CLERK_SECRET_KEY` | Clerk Dashboard | Sessão e contas da plataforma. A chave publicável entra duas vezes: com o prefixo `VITE_` para o bundle do cliente e sem prefixo para o `@clerk/express` no servidor. |
 | `OPENROUTER_API_KEY` | OpenRouter | Assistente editorial e variações de conteúdo. |
 | `R2_*` | Cloudflare R2 | Upload e exibição de moodboards e mídias. |
 | `APP_URL` | Seu domínio público | Atribuição segura das chamadas de IA. |
