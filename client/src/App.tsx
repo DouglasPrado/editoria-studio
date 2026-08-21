@@ -5,12 +5,20 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ClerkSignIn from "./pages/ClerkSignIn";
+import ClerkSignUp from "./pages/ClerkSignUp";
 import Home from "./pages/Home";
 
 function Router() {
   return (
     <Switch>
+      {/* As rotas com "/*" nao sao redundancia. O <SignIn>/<SignUp> usa
+          routing="path" e navega para sub-rotas durante o fluxo —
+          /sign-up/verify-email-address, /sign-in/factor-one. Sem elas, a
+          verificacao de e-mail cai no NotFound do catch-all. */}
       <Route path="/sign-in" component={ClerkSignIn} />
+      <Route path="/sign-in/*" component={ClerkSignIn} />
+      <Route path="/sign-up" component={ClerkSignUp} />
+      <Route path="/sign-up/*" component={ClerkSignUp} />
       <Route path="/" component={Home} />
       <Route path="/planejamento" component={Home} />
       <Route path="/editorial" component={Home} />
