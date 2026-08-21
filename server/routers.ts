@@ -1,12 +1,16 @@
 import { z } from "zod";
 import { contentFormatSchema, contentStatusSchema } from "@shared/editoria";
-import * as db from "./db";
+import * as mysqlDb from "./db";
+import * as postgresDb from "./db-postgres";
+import { ENV } from "./_core/env";
 import { invokeLLM } from "./_core/llm";
 import { storagePut } from "./storage";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { COOKIE_NAME } from "@shared/const";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { systemRouter } from "./_core/systemRouter";
+
+const db = ENV.runtime === "external" ? postgresDb : mysqlDb;
 
 const projectInput = z.object({
   name: z.string().trim().min(2).max(140),

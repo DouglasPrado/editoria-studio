@@ -30,7 +30,7 @@ export default function Home() {
   const content = trpc.content.list.useQuery(undefined, { enabled: Boolean(user) });
   const moodboards = trpc.moodboard.list.useQuery(undefined, { enabled: Boolean(user) });
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const selectedProject = projects.data?.find(project => project.id === selectedProjectId) ?? projects.data?.[0];
+  const selectedProject = projects.data?.find((project: any) => project.id === selectedProjectId) ?? projects.data?.[0];
   useEffect(() => { if (projects.data?.length && !selectedProjectId) setSelectedProjectId(projects.data[0].id); }, [projects.data, selectedProjectId]);
   const refreshing = () => Promise.all([utils.project.list.invalidate(), utils.editorial.list.invalidate(), utils.content.list.invalidate(), utils.moodboard.list.invalidate()]);
   const loadError = projects.error || pillars.error || content.error || moodboards.error;

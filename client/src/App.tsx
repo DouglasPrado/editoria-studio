@@ -4,11 +4,13 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import ClerkSignIn from "./pages/ClerkSignIn";
 import Home from "./pages/Home";
 
 function Router() {
   return (
     <Switch>
+      <Route path="/sign-in" component={ClerkSignIn} />
       <Route path="/" component={Home} />
       <Route path="/planejamento" component={Home} />
       <Route path="/editorial" component={Home} />

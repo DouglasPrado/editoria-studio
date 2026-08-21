@@ -212,15 +212,14 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+const resolveApiUrl = () => ENV.runtime === "external"
+  ? "https://openrouter.ai/api/v1/chat/completions"
+  : ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
     : "https://forge.manus.im/v1/chat/completions";
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
+  if (ENV.runtime === "external" ? !ENV.openRouterApiKey : !ENV.forgeApiKey) throw new Error("A chave do provedor de IA não está configurada.");
 };
 
 const normalizeResponseFormat = ({
@@ -362,9 +361,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     messages: messages.map(normalizeMessage),
   };
 
-  if (model) {
-    payload.model = model;
-  }
+  if (ENV.runtime === "external") payload.model = process.env.OPENROUTER_MODEL ?? "openai/gpt-5.2";
+  else if (model) payload.model = model;
 
   if (tools && tools.length > 0) {
     payload.tools = tools;
@@ -405,7 +403,8 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${ENV.runtime === "external" ? ENV.openRouterApiKey : ENV.forgeApiKey}`,
+      ...(ENV.runtime === "external" ? { "HTTP-Referer": process.env.APP_URL ?? "", "X-OpenRouter-Title": "Editoria Studio" } : {}),
     },
     body: JSON.stringify(payload),
   });
@@ -435,12 +434,11 @@ export type ModelsResponse = {
 export async function listLLMModels(): Promise<ModelsResponse> {
   assertApiKey();
 
-  const url = ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/models`
-    : "https://forge.manus.im/v1/models";
+  const url = ENV.runtime === "external" ? "https://openrouter.ai/api/v1/models" : ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/models` : "https://forge.manus.im/v1/models";
 
   const response = await fetchWithBackoff(url, {
-    headers: { authorization: `Bearer ${ENV.forgeApiKey}` },
+    headers: { authorization: `Bearer ${ENV.runtime === "external" ? ENV.openRouterApiKey : ENV.forgeApiKey}` },
   });
 
   if (!response.ok) {

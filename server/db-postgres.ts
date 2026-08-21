@@ -1,0 +1,53 @@
+import { Pool } from "pg";
+import type { User } from "../drizzle/schema";
+import type { ContentFormat, ContentStatus } from "@shared/editoria";
+
+type Project = {
+  id: number; userId: number; name: string; description: string | null; brandTone: string | null;
+  colorPrimary: string; colorAccent: string; fontHeading: string; fontBody: string; createdAt: Date; updatedAt: Date;
+};
+type EditorialPillar = { id: number; projectId: number; name: string; theme: string; description: string | null; color: string; createdAt: Date };
+type ContentItem = {
+  id: number; projectId: number; pillarId: number | null; title: string; format: ContentFormat; status: ContentStatus;
+  scheduledFor: Date | null; script: string | null; caption: string | null; hashtags: string | null; visualReference: string | null;
+  completedAt: Date | null; createdAt: Date; updatedAt: Date;
+};
+type MoodboardItem = { id: number; projectId: number; campaign: string; title: string; imageKey: string; imageUrl: string; createdAt: Date };
+
+let pool: Pool | null = null;
+function getPool() {
+  if (!pool) {
+    if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não está configurada.");
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined });
+  }
+  return pool;
+}
+async function query<T = unknown>(text: string, params: unknown[]) { return getPool().query(text, params) as Promise<any>; }
+const userFromRow = (row: any): User => ({ id: Number(row.id), openId: row.open_id, name: row.name, email: row.email, loginMethod: row.login_method, role: row.role, createdAt: row.created_at, updatedAt: row.updated_at, lastSignedIn: row.last_signed_in });
+const projectFromRow = (row: any): Project => ({ id: Number(row.id), userId: Number(row.user_id), name: row.name, description: row.description, brandTone: row.brand_tone, colorPrimary: row.color_primary, colorAccent: row.color_accent, fontHeading: row.font_heading, fontBody: row.font_body, createdAt: row.created_at, updatedAt: row.updated_at });
+const pillarFromRow = (row: any): EditorialPillar => ({ id: Number(row.id), projectId: Number(row.project_id), name: row.name, theme: row.theme, description: row.description, color: row.color, createdAt: row.created_at });
+const contentFromRow = (row: any): ContentItem => ({ id: Number(row.id), projectId: Number(row.project_id), pillarId: row.pillar_id ? Number(row.pillar_id) : null, title: row.title, format: row.format, status: row.status, scheduledFor: row.scheduled_for, script: row.script, caption: row.caption, hashtags: row.hashtags, visualReference: row.visual_reference, completedAt: row.completed_at, createdAt: row.created_at, updatedAt: row.updated_at });
+const moodboardFromRow = (row: any): MoodboardItem => ({ id: Number(row.id), projectId: Number(row.project_id), campaign: row.campaign, title: row.title, imageKey: row.image_key, imageUrl: row.image_url, createdAt: row.created_at });
+
+export async function upsertUser(user: Partial<User> & Pick<User, "openId">): Promise<void> {
+  const role = user.role ?? "user";
+  await query(`INSERT INTO users (open_id, name, email, login_method, role, last_signed_in)
+    VALUES ($1, $2, $3, $4, $5, NOW())
+    ON CONFLICT (open_id) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), email = COALESCE(EXCLUDED.email, users.email), login_method = COALESCE(EXCLUDED.login_method, users.login_method), last_signed_in = NOW(), updated_at = NOW()`,
+    [user.openId, user.name ?? null, user.email ?? null, user.loginMethod ?? null, role]);
+}
+export async function getUserByOpenId(openId: string) { const result = await query<any>("SELECT * FROM users WHERE open_id = $1 LIMIT 1", [openId]); return result.rows[0] ? userFromRow(result.rows[0]) : undefined; }
+async function ownedProject(userId: number, projectId: number) { const result = await query<any>("SELECT * FROM projects WHERE id = $1 AND user_id = $2 LIMIT 1", [projectId, userId]); if (!result.rows[0]) throw new Error("Projeto não encontrado ou sem permissão."); return projectFromRow(result.rows[0]); }
+export async function listProjects(userId: number) { const result = await query<any>("SELECT * FROM projects WHERE user_id = $1 ORDER BY updated_at DESC", [userId]); return result.rows.map(projectFromRow); }
+export async function createProject(userId: number, input: { name: string; description?: string; brandTone?: string }) { const result = await query<any>("INSERT INTO projects (user_id, name, description, brand_tone) VALUES ($1, $2, $3, $4) RETURNING id", [userId, input.name, input.description ?? null, input.brandTone ?? null]); return Number(result.rows[0].id); }
+export async function updateProjectBrand(userId: number, projectId: number, input: { description?: string; brandTone?: string; colorPrimary: string; colorAccent: string; fontHeading: string; fontBody: string }) { await ownedProject(userId, projectId); await query("UPDATE projects SET description = $1, brand_tone = $2, color_primary = $3, color_accent = $4, font_heading = $5, font_body = $6, updated_at = NOW() WHERE id = $7", [input.description ?? null, input.brandTone ?? null, input.colorPrimary, input.colorAccent, input.fontHeading, input.fontBody, projectId]); }
+export async function listPillars(userId: number) { const result = await query<any>("SELECT ep.* FROM editorial_pillars ep JOIN projects p ON p.id = ep.project_id WHERE p.user_id = $1 ORDER BY ep.created_at DESC", [userId]); return result.rows.map(pillarFromRow); }
+export async function createPillar(userId: number, input: { projectId: number; name: string; theme: string; description?: string; color?: string }) { await ownedProject(userId, input.projectId); const result = await query<any>("INSERT INTO editorial_pillars (project_id, name, theme, description, color) VALUES ($1, $2, $3, $4, $5) RETURNING id", [input.projectId, input.name, input.theme, input.description ?? null, input.color ?? "#B68A56"]); return Number(result.rows[0].id); }
+export async function listContent(userId: number) { const result = await query<any>("SELECT c.* FROM content_items c JOIN projects p ON p.id = c.project_id WHERE p.user_id = $1 ORDER BY c.scheduled_for DESC NULLS LAST, c.created_at DESC", [userId]); const items = result.rows.map(contentFromRow) as ContentItem[]; const pillars = await listPillars(userId) as EditorialPillar[]; return items.map((item: ContentItem) => ({ ...item, pillar: pillars.find((pillar: EditorialPillar) => pillar.id === item.pillarId) ?? null })); }
+export async function createContent(userId: number, input: { projectId: number; pillarId?: number | null; title: string; format: ContentFormat; status: ContentStatus; scheduledFor?: Date | null; script?: string; caption?: string; hashtags?: string; visualReference?: string; completedAt?: Date | null }) { await ownedProject(userId, input.projectId); if (input.pillarId) { const pillar = await query("SELECT id FROM editorial_pillars WHERE id = $1 AND project_id = $2", [input.pillarId, input.projectId]); if (!pillar.rows[0]) throw new Error("Pilar editorial inválido para este projeto."); } const result = await query<any>("INSERT INTO content_items (project_id, pillar_id, title, format, status, scheduled_for, script, caption, hashtags, visual_reference, completed_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id", [input.projectId, input.pillarId ?? null, input.title, input.format, input.status, input.scheduledFor ?? null, input.script ?? null, input.caption ?? null, input.hashtags ?? null, input.visualReference ?? null, input.completedAt ?? null]); return Number(result.rows[0].id); }
+export async function getContentForUser(userId: number, contentId: number) { const result = await query<any>("SELECT c.* FROM content_items c JOIN projects p ON p.id = c.project_id WHERE c.id = $1 AND p.user_id = $2 LIMIT 1", [contentId, userId]); if (!result.rows[0]) throw new Error("Conteúdo não encontrado ou sem permissão."); return { db: getPool(), item: contentFromRow(result.rows[0]) }; }
+export async function updateContentStatus(userId: number, contentId: number, status: ContentStatus) { await getContentForUser(userId, contentId); await query("UPDATE content_items SET status = $1, updated_at = NOW() WHERE id = $2", [status, contentId]); }
+export async function updateContent(userId: number, contentId: number, input: { pillarId?: number | null; title?: string; format?: ContentFormat; status?: ContentStatus; scheduledFor?: Date | null; script?: string; caption?: string; hashtags?: string; visualReference?: string }) { const existing = await getContentForUser(userId, contentId); if (input.pillarId) { const pillar = await query("SELECT id FROM editorial_pillars WHERE id = $1 AND project_id = $2", [input.pillarId, existing.item.projectId]); if (!pillar.rows[0]) throw new Error("Pilar editorial inválido para este projeto."); } const fields: Array<[string, unknown]> = [["pillar_id", input.pillarId], ["title", input.title], ["format", input.format], ["status", input.status], ["scheduled_for", input.scheduledFor], ["script", input.script], ["caption", input.caption], ["hashtags", input.hashtags], ["visual_reference", input.visualReference]].filter(([, value]) => value !== undefined) as Array<[string, unknown]>; if (!fields.length) return; const values = fields.map(([, value]) => value); const assignments = fields.map(([column], index) => `${column} = $${index + 1}`); values.push(contentId); await query(`UPDATE content_items SET ${assignments.join(", ")}, updated_at = NOW() WHERE id = $${values.length}`, values); }
+export async function setContentCompleted(userId: number, contentId: number, completed: boolean) { await getContentForUser(userId, contentId); await query("UPDATE content_items SET completed_at = $1, status = $2, updated_at = NOW() WHERE id = $3", [completed ? new Date() : null, completed ? "publicado" : "pronto", contentId]); }
+export async function listMoodboards(userId: number) { const result = await query<any>("SELECT m.* FROM moodboard_items m JOIN projects p ON p.id = m.project_id WHERE p.user_id = $1 ORDER BY m.created_at DESC", [userId]); return result.rows.map(moodboardFromRow); }
+export async function createMoodboardItem(userId: number, input: { projectId: number; campaign: string; title: string; imageKey: string; imageUrl: string }) { await ownedProject(userId, input.projectId); const result = await query<any>("INSERT INTO moodboard_items (project_id, campaign, title, image_key, image_url) VALUES ($1,$2,$3,$4,$5) RETURNING id", [input.projectId, input.campaign, input.title, input.imageKey, input.imageUrl]); return Number(result.rows[0].id); }

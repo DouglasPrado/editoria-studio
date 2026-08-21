@@ -27,3 +27,18 @@
 - [ ] Criar fluxo de publicação com prévia, legenda e confirmação explícita antes do envio.
 - [ ] Atualizar o conteúdo para publicado somente após confirmação de publicação bem-sucedida.
 - [ ] Validar e salvar a integração de publicação real.
+- [x] Mapear as dependências gerenciadas que precisam ser substituídas para execução fora da plataforma atual.
+- [x] Preparar configuração de implantação compatível com Easypanel e documentar as variáveis obrigatórias.
+- [x] Definir a estratégia de migração do banco atual para PostgreSQL externo.
+- [x] Adaptar autenticação, armazenamento de arquivos e serviços de IA para provedores externos.
+- [ ] Validar a execução independente e orientar a publicação no Easypanel.
+- [x] Configurar a autenticação externa com Clerk.
+- [x] Configurar armazenamento de mídias no Cloudflare R2.
+- [x] Integrar a geração editorial por meio do OpenRouter.
+- [x] Adaptar a camada de dados para PostgreSQL no Easypanel e preparar a migração dos dados.
+- [x] Criar configuração de execução independente para o serviço Node.js no Easypanel.
+- [x] Documentar o provisionamento de PostgreSQL, Clerk, R2, OpenRouter e as variáveis de ambiente no Easypanel.
+- [x] Preparar exportação e importação dos dados atuais para PostgreSQL.
+- [x] Criar a rota de entrada do Clerk para o modo externo e validar o redirecionamento de autenticação.
+- [ ] Validar em modo externo o login, logout e provisionamento de usuário Clerk com credenciais de teste.
+- [x] Adicionar cobertura mínima da rota e do redirecionamento externo de autenticação.
